@@ -1,0 +1,26 @@
+plugins:
+  chat_demo_enabled:
+    default: false
+    client: true
+  chat_demo_game_name:
+    default: "Deep Rock Galactic"
+    client: false
+  chat_demo_messages_per_minute:
+    default: 6
+    min: 1
+    max: 30
+    client: false
+  chat_demo_script_lines:
+    default: 100
+    min: 20
+    max: 1000
+    client: false
+  # Populated automatically once the demo channel has been created.
+  chat_demo_category_id:
+    default: 0
+    hidden: true
+    client: false
+  chat_demo_channel_id:
+    default: 0
+    hidden: true
+    client: false
