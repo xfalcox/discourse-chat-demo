@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 module ::ChatDemo
-  # Creates (once) the category + chat channel that receives generated messages,
-  # joins the cast, and posts a one-time AI-content disclaimer.
+  # Creates (once) the category + chat channel that receives generated messages
+  # and joins the cast. The AI-content disclaimer lives in the channel
+  # description so it stays visible (a posted message would scroll away).
   module ChannelSetup
+    RETENTION_DAYS = 2
+
     def self.ensure!
       existing = current_channel
       return existing if existing
@@ -17,7 +20,6 @@ module ::ChatDemo
       SiteSetting.chat_demo_channel_id = channel.id
 
       join_cast(channel)
-      post_disclaimer(channel)
 
       channel
     end
@@ -33,6 +35,8 @@ module ::ChatDemo
       SiteSetting.chat_enabled = true unless SiteSetting.chat_enabled
       SiteSetting.enable_public_channels =
         true unless SiteSetting.enable_public_channels
+      # Demo content is high-volume and ephemeral; keep only a couple of days.
+      SiteSetting.chat_channel_retention_days = RETENTION_DAYS
     end
 
     def self.ensure_category
@@ -46,8 +50,9 @@ module ::ChatDemo
     end
 
     def self.find_or_create_channel(category)
-      game = SiteSetting.chat_demo_game_name
-      name = I18n.t("chat_demo.channel_name", game: game)
+      # Generic channel name (not the game name) — a game's Discord has a
+      # "#general", not a room named after the game.
+      name = I18n.t("chat_demo.channel_name")
 
       existing = Chat::Channel.find_by(chatable: category, name: name)
       return existing if existing
@@ -57,7 +62,7 @@ module ::ChatDemo
           guardian: Discourse.system_user.guardian,
           params: {
             name: name,
-            description: I18n.t("chat_demo.channel_description", game: game),
+            description: I18n.t("chat_demo.disclaimer"),
             category_id: category.id,
             auto_join_users: false
           }
@@ -67,6 +72,8 @@ module ::ChatDemo
         raise "discourse-chat-demo: failed to create channel (#{result.inspect})"
       end
 
+      # Prevent the generated script from ever @here/@all-pinging real members.
+      result.channel.update!(allow_channel_wide_mentions: false)
       result.channel
     end
 
@@ -78,20 +85,6 @@ module ::ChatDemo
             membership.following = true
           end
       end
-    end
-
-    def self.post_disclaimer(channel)
-      Chat::CreateMessage.call(
-        guardian: Discourse.system_user.guardian,
-        params: {
-          chat_channel_id: channel.id,
-          message: I18n.t("chat_demo.disclaimer")
-        },
-        options: {
-          enforce_membership: true,
-          process_inline: true
-        }
-      )
     end
   end
 end

@@ -84,6 +84,16 @@ module ::ChatDemo
       user.custom_fields[CUSTOM_FIELD] = true
       user.save_custom_fields
 
+      # These accounts have @chat-demo.invalid emails — make sure nothing ever
+      # tries to email them (digests, mentions, messages would all bounce).
+      never = UserOption.email_level_types[:never]
+      user.user_option.update!(
+        mailing_list_mode: false,
+        email_digests: false,
+        email_level: never,
+        email_messages_level: never
+      )
+
       if character[:bio].present?
         user.user_profile.update!(bio_raw: character[:bio])
       end

@@ -18,6 +18,16 @@ module ::ChatDemo
       output = reply(llm_model)
       lines = parse(output)
 
+      # Never wipe a working script for an empty/garbage generation — keep
+      # yesterday's content so the channel stays lively. (A raised API error
+      # also leaves the table untouched, since replace_script! isn't reached.)
+      if lines.empty?
+        Rails.logger.warn(
+          "discourse-chat-demo: generation produced no usable lines; keeping the previous script"
+        )
+        return 0
+      end
+
       replace_script!(lines)
       lines.size
     end
