@@ -3,6 +3,7 @@ en:
     chat_demo_enabled: "Seed a demo chat channel with AI-generated, continuously refreshed mock conversations. For demo sites only."
     chat_demo_game_name: "The game the demo channel is themed around. Drives the news search and the tone of the generated conversation."
     chat_demo_messages_per_minute: "How many messages to post into the demo channel each minute (spaced evenly across the minute)."
+    chat_demo_agent_id: "The Discourse AI agent used to generate the script. Leave blank to use the built-in agent. A custom agent should have the web search tool and return a \"messages\" array of \"username: message\" strings; the game name and cast usernames are supplied in the prompt."
     chat_demo_script_lines: "How many conversation lines the daily generator should produce. The script replays from the top once exhausted, until the next daily refresh."
     chat_demo_category_id: "Internal: the category created to hold the demo chat channel."
     chat_demo_channel_id: "Internal: the demo chat channel that receives generated messages."

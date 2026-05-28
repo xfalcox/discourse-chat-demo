@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
 module ::ChatDemo
-  # Drives the ScriptAgent to produce a fresh day's worth of conversation, then
+  # Drives a Discourse AI agent (the one chosen via chat_demo_agent_id, or the
+  # built-in ScriptAgent) to produce a fresh day's worth of conversation, then
   # replaces the contents of the chat_demo_messages table in one transaction.
   # All Discourse AI interaction goes through the agent/bot abstraction; the
-  # agent owns the Google tool and runs the search-and-reason loop itself.
+  # agent owns the search tool and runs the search-and-reason loop itself.
   module ScriptGenerator
     class NoLlmConfigured < StandardError
     end
@@ -12,10 +13,10 @@ module ::ChatDemo
     def self.run!
       raise NoLlmConfigured unless DiscourseAiCompat.available?
 
-      llm_model = resolve_llm_model
+      agent, llm_model = resolve_agent_and_model
       raise NoLlmConfigured if llm_model.nil?
 
-      output = reply(llm_model)
+      output = reply(agent, llm_model)
       lines = parse(output)
 
       # Never wipe a working script for an empty/garbage generation — keep
@@ -32,14 +33,31 @@ module ::ChatDemo
       lines.size
     end
 
-    def self.resolve_llm_model
-      model_id = SiteSetting.ai_default_llm_model.to_s.split(":").last
-      return nil if model_id.blank?
+    # Use the agent configured via the chat_demo_agent_id site setting (so the
+    # prompt/tools/model can be tuned in the admin UI), falling back to the
+    # built-in ScriptAgent. A configured agent may bring its own default LLM.
+    def self.resolve_agent_and_model
+      agent_id = SiteSetting.chat_demo_agent_id
+      record = AiAgent.find_by_id_from_cache(agent_id) if agent_id.present?
+      # class_instance returns the agent *class*; instantiate it (nil-safe).
+      klass = record&.class_instance
 
-      LlmModel.find_by(id: model_id)
+      if klass
+        [
+          klass.new,
+          find_llm(record.default_llm_id || SiteSetting.ai_default_llm_model)
+        ]
+      else
+        [ScriptAgent.new, find_llm(SiteSetting.ai_default_llm_model)]
+      end
     end
 
-    def self.reply(llm_model)
+    def self.find_llm(model_id)
+      id = model_id.to_s.split(":").last
+      id.present? ? LlmModel.find_by(id: id) : nil
+    end
+
+    def self.reply(agent, llm_model)
       context =
         DiscourseAiCompat.bot_context_class.new(
           user: Discourse.system_user,
@@ -48,7 +66,6 @@ module ::ChatDemo
           messages: [{ type: :user, content: task_message }]
         )
 
-      agent = ScriptAgent.new
       bot =
         DiscourseAiCompat.bot_class.as(
           Discourse.system_user,
@@ -63,14 +80,28 @@ module ::ChatDemo
       structured_output
     end
 
+    # Self-contained so a custom agent configured in the admin UI has everything
+    # it needs (game, cast, output shape) without hard-coding any of it.
     def self.task_message
       game = SiteSetting.chat_demo_game_name
       count = SiteSetting.chat_demo_script_lines
+      roster =
+        Cast::ROSTER
+          .map { |c| "- #{c[:username]} (#{c[:name]}): #{c[:bio]}" }
+          .join("\n")
 
       <<~MSG
-        Search for the latest news and updates about "#{game}", then write about #{count} chat
-        messages as an ordered, casual conversation between the cast reacting to it and chatting
-        generally. Remember: each item in "messages" must be formatted as "username: message".
+        Game: #{game}
+
+        You are writing chat for this community's #general channel. Search the web for the latest
+        news and updates about "#{game}", then write about #{count} chat messages as an ordered,
+        casual conversation reacting to it and chatting generally.
+
+        Use ONLY these usernames (never invent participants):
+        #{roster}
+
+        Output the "messages" array in conversation order; each item must be formatted EXACTLY as
+        "username: message" (the username, then a colon and a space, then the message text).
       MSG
     end
 

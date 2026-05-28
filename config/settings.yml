@@ -10,6 +10,13 @@ plugins:
     min: 1
     max: 30
     client: false
+  # Leave blank to use the plugin's built-in agent. Set to a Discourse AI agent
+  # to drive generation with a prompt/tools/model configured in the admin UI.
+  chat_demo_agent_id:
+    default: ""
+    type: enum
+    enum: "DiscourseAi::Configuration::AgentEnumerator"
+    client: false
   chat_demo_script_lines:
     default: 100
     min: 20
