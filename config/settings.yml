@@ -22,12 +22,9 @@ plugins:
     min: 20
     max: 1000
     client: false
-  # Populated automatically once the demo channel has been created.
-  chat_demo_category_id:
-    default: 0
-    hidden: true
-    client: false
+  # The chat channel the demo posts into. Defaults to the "General" channel
+  # Discourse ships with (id 2), so the plugin reuses it instead of creating a
+  # second general-style channel.
   chat_demo_channel_id:
-    default: 0
-    hidden: true
+    default: 2
     client: false

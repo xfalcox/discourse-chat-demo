@@ -1,30 +1,29 @@
 # frozen_string_literal: true
 
 module ::ChatDemo
-  # Creates (once) the category + chat channel that receives generated messages
-  # and joins the cast. The AI-content disclaimer lives in the channel
-  # description so it stays visible (a posted message would scroll away).
+  # Prepares the target chat channel (chosen via chat_demo_channel_id, defaulting
+  # to the shipped "General" channel, id 2) and joins the cast. It does NOT
+  # create a channel — it posts into an existing one, to avoid ending up with a
+  # second "general"-style channel alongside the one Discourse already ships.
   module ChannelSetup
     RETENTION_DAYS = 2
 
     def self.ensure!
-      existing = current_channel
-      return existing if existing
+      channel = target_channel
+      if channel.nil?
+        Rails.logger.warn(
+          "discourse-chat-demo: chat_demo_channel_id=#{SiteSetting.chat_demo_channel_id} is not a chat channel; nothing to prepare"
+        )
+        return nil
+      end
 
       enable_chat!
-
-      category = ensure_category
-      channel = find_or_create_channel(category)
-
-      SiteSetting.chat_demo_category_id = category.id
-      SiteSetting.chat_demo_channel_id = channel.id
-
+      prepare_channel(channel)
       join_cast(channel)
-
       channel
     end
 
-    def self.current_channel
+    def self.target_channel
       id = SiteSetting.chat_demo_channel_id.to_i
       return nil if id <= 0
 
@@ -39,42 +38,13 @@ module ::ChatDemo
       SiteSetting.chat_channel_retention_days = RETENTION_DAYS
     end
 
-    def self.ensure_category
-      id = SiteSetting.chat_demo_category_id.to_i
-      category = Category.find_by(id: id) if id > 0
-      category ||
-        Category.create!(
-          name: I18n.t("chat_demo.category_name"),
-          user: Discourse.system_user
-        )
-    end
-
-    def self.find_or_create_channel(category)
-      # Generic channel name (not the game name) — a game's Discord has a
-      # "#general", not a room named after the game.
-      name = I18n.t("chat_demo.channel_name")
-
-      existing = Chat::Channel.find_by(chatable: category, name: name)
-      return existing if existing
-
-      result =
-        Chat::CreateCategoryChannel.call(
-          guardian: Discourse.system_user.guardian,
-          params: {
-            name: name,
-            description: I18n.t("chat_demo.disclaimer"),
-            category_id: category.id,
-            auto_join_users: false
-          }
-        )
-
-      if result.failure?
-        raise "discourse-chat-demo: failed to create channel (#{result.inspect})"
-      end
-
-      # Prevent the generated script from ever @here/@all-pinging real members.
-      result.channel.update!(allow_channel_wide_mentions: false)
-      result.channel
+    def self.prepare_channel(channel)
+      # Put the AI-content disclaimer where it stays visible, and stop the
+      # generated script from ever @here/@all-pinging real members.
+      channel.update!(
+        description: I18n.t("chat_demo.disclaimer"),
+        allow_channel_wide_mentions: false
+      )
     end
 
     def self.join_cast(channel)
